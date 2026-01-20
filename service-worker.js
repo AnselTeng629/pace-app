@@ -1,4 +1,4 @@
-const CACHE_NAME = "pace-speed-ios-v4"; // 每次更新功能就 +1
+const CACHE_NAME = "pace-speed-ios-v5"; // 每次更新功能就 +1
 const ASSETS = [
   "./",
   "./index.html",
@@ -54,3 +54,4 @@ self.addEventListener("fetch", (e) => {
     caches.match(req).then((cached) => cached || fetch(req))
   );
 });
+
