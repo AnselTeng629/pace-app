@@ -119,6 +119,27 @@
 
 <script>
 /* ---------- Utilities ---------- */
+/* ---------- Mode Controller（唯一入口） ---------- */
+function setMode(nextMode) {
+  if (mode === nextMode) return;
+
+  mode = nextMode;
+
+  const isPace = mode === "pace";
+
+  // Tabs 狀態
+  tabPace.setAttribute("aria-selected", isPace ? "true" : "false");
+  tabSpeed.setAttribute("aria-selected", isPace ? "false" : "true");
+
+  // Pane 顯示
+  pacePane.classList.toggle("hidden", !isPace);
+  speedPane.classList.toggle("hidden", isPace);
+
+  // 清訊息並重新計算
+  clearMsg();
+  recalc();
+}
+
 function pad2(n){ return String(n).padStart(2,"0"); }
 
 function parsePaceText(t){
@@ -199,6 +220,9 @@ function recalc(){
 }
 
 /* ---------- Events ---------- */
+tabPace.onclick = () => setMode("pace");
+tabSpeed.onclick = () => setMode("speed");
+
 paceText.addEventListener("input", recalc);
 speed.addEventListener("input", recalc);
 
@@ -218,13 +242,10 @@ function copyResult(){
   okMsg.textContent="已複製";
 }
 
-document.getElementById("btnSwap").onclick=()=>{
-  mode = mode==="pace"?"speed":"pace";
-  document.getElementById("pacePane").classList.toggle("hidden");
-  document.getElementById("speedPane").classList.toggle("hidden");
-  clearMsg();
-  recalc();
+document.getElementById("btnSwap").onclick = () => {
+  setMode(mode === "pace" ? "speed" : "pace");
 };
+
 
 /* ---------- PWA ---------- */
 if("serviceWorker" in navigator){
