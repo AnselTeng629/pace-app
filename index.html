@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>跑步配速 ↔ 速度 計算機</title>
+
+  <!-- iPhone / PWA -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#0b57d0">
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+  <style>
+    :root { --border:#d0d7de; --muted:#57606a; --bg:#ffffff; --panel:#f6f8fa; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Arial, "Noto Sans TC", sans-serif;
+      background: var(--panel);
+      margin: 0;
+      padding: 20px;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .wrap { max-width: 720px; margin: auto; }
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    h1 { font-size: 18px; margin: 0 0 14px; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 15px;
+    }
+    .tab[aria-selected="true"] {
+      background: #eaeef2;
+      font-weight: 600;
+    }
+
+    label { font-size: 13px; color: var(--muted); margin-bottom: 6px; display: block; }
+    input, button {
+      width: 100%;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      box-sizing: border-box;
+    }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 520px){ .row { grid-template-columns: 1fr; } }
+
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .primary { background:#0b57d0; color:#fff; border-color:#0b57d0; }
+
+    .result {
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .big { font-size: 26px; font-weight: 700; }
+    .small { margin-top: 6px; font-size: 13px; color: var(--muted); }
+    .ok { color:#1a7f37; margin-top:8px; font-size:13px; }
+    .error { color:#b42318; margin-top:8px; font-size:13px; }
+    .hidden { display:none; }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>跑步配速 ↔ 速度 計算機</h1>
+
+    <div class="tabs">
+      <button class="tab" id="tabPace" aria-selected="true">配速 → 速度</button>
+      <button class="tab" id="tabSpeed">速度 → 配速</button>
+    </div>
+
+    <!-- 配速 -->
+    <div id="pacePane">
+      <label>快速輸入配速（7 / 7.5 / 7:30）</label>
+      <input id="paceText" placeholder="例如 7.5">
+
+      <div class="row" style="margin-top:10px;">
+        <input id="paceMin" type="number" placeholder="分">
+        <input id="paceSec" type="number" placeholder="秒">
+      </div>
+    </div>
+
+    <!-- 速度 -->
+    <div id="speedPane" class="hidden">
+      <label>速度（km/h）</label>
+      <input id="speed" type="number" step="0.1" placeholder="例如 8.0">
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="btnSwap">交換方向</button>
+      <button id="btnCopy">複製結果</button>
+    </div>
+
+    <div class="result">
+      <div class="big" id="mainResult">--</div>
+      <div class="small" id="subResult">輸入數值後會即時計算</div>
+      <div class="ok" id="okMsg"></div>
+      <div class="error" id="errMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- Utilities ---------- */
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+function parsePaceText(t){
+  t = t.trim();
+  if(!t) return null;
+
+  if(/^\d+$/.test(t)){
+    const m = Number(t);
+    if(m<=0) return {error:"配速不可為 0"};
+    return {m, s:0};
+  }
+
+  if(/^\d+(\.\d+)?$/.test(t)){
+    const v = Number(t);
+    if(v<=0) return {error:"配速不可為 0"};
+    const m = Math.floor(v);
+    let s = Math.round((v-m)*60);
+    if(s===60){ return {m:m+1,s:0}; }
+    return {m,s};
+  }
+
+  const m = t.match(/^(\d+):(\d{1,2})$/);
+  if(!m) return {error:"格式錯誤"};
+  const min = Number(m[1]), sec = Number(m[2]);
+  if(sec>59) return {error:"秒數需 0–59"};
+  if(min+sec===0) return {error:"配速不可為 0"};
+  return {m:min,s:sec};
+}
+
+function paceToSpeed(m,s){ return 60/(m+s/60); }
+function speedToPace(v){
+  let t = 60/v;
+  let m = Math.floor(t);
+  let s = Math.round((t-m)*60);
+  if(s===60){ m++; s=0; }
+  return {m,s};
+}
+
+/* ---------- Elements ---------- */
+const paceText = document.getElementById("paceText");
+const paceMin = document.getElementById("paceMin");
+const paceSec = document.getElementById("paceSec");
+const speed = document.getElementById("speed");
+
+const mainResult = document.getElementById("mainResult");
+const subResult = document.getElementById("subResult");
+const okMsg = document.getElementById("okMsg");
+const errMsg = document.getElementById("errMsg");
+
+let mode = "pace";
+
+/* ---------- Logic ---------- */
+function clearMsg(){ okMsg.textContent=""; errMsg.textContent=""; }
+
+function recalc(){
+  clearMsg();
+
+  if(mode==="pace"){
+    const p = parsePaceText(paceText.value);
+    if(!p){ mainResult.textContent="--"; return; }
+    if(p.error){ errMsg.textContent=p.error; return; }
+
+    paceMin.value = p.m;
+    paceSec.value = p.s;
+
+    const spd = paceToSpeed(p.m,p.s);
+    mainResult.textContent = spd.toFixed(2)+" km/h";
+    subResult.textContent = `配速 ${p.m}:${pad2(p.s)} /km`;
+  }else{
+    const v = Number(speed.value);
+    if(!v){ mainResult.textContent="--"; return; }
+    if(v<=0){ errMsg.textContent="速度需 > 0"; return; }
+
+    const p = speedToPace(v);
+    mainResult.textContent = `${p.m}:${pad2(p.s)} /km`;
+    subResult.textContent = `速度 ${v} km/h`;
+  }
+}
+
+/* ---------- Events ---------- */
+paceText.addEventListener("input", recalc);
+speed.addEventListener("input", recalc);
+
+paceText.addEventListener("keydown", e=>{
+  if(e.key==="Enter"){
+    recalc();
+    const p = parsePaceText(paceText.value);
+    if(p&&!p.error) paceText.value=`${p.m}:${pad2(p.s)}`;
+    if(mainResult.textContent!=="--") copyResult();
+  }
+});
+
+document.getElementById("btnCopy").onclick = copyResult;
+function copyResult(){
+  const txt = mainResult.textContent+"\n"+subResult.textContent;
+  navigator.clipboard.writeText(txt);
+  okMsg.textContent="已複製";
+}
+
+document.getElementById("btnSwap").onclick=()=>{
+  mode = mode==="pace"?"speed":"pace";
+  document.getElementById("pacePane").classList.toggle("hidden");
+  document.getElementById("speedPane").classList.toggle("hidden");
+  clearMsg();
+  recalc();
+};
+
+/* ---------- PWA ---------- */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+</body>
+</html>
