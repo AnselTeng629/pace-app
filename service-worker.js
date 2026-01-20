@@ -1,4 +1,4 @@
-const CACHE_NAME = "pace-speed-ios-v1";
+const CACHE_NAME = "pace-speed-ios-v2";
 const FILES = [
   "./",
   "./index.html",
@@ -22,3 +22,4 @@ self.addEventListener("fetch", e => {
     caches.match(e.request).then(r => r || fetch(e.request))
   );
 });
+
